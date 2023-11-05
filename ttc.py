@@ -1,6 +1,8 @@
 import hashlib
 import json
+import requests
 from time import time
+from urllib.parse import urlparse
 from flask import Flask, jsonify, request
 
 
@@ -14,6 +16,8 @@ class Blockchain:
             "previous_hash": ""
         }]
         self.current_trxs = []
+        self.nodes = set()
+        self.client_id = time()
 
     def new_trx(self, sender, recipient, amount):
         self.current_trxs.append({
@@ -28,11 +32,10 @@ class Blockchain:
         endProsses = False
         ts = time()
         while endProsses is False:
-            print(proof)
             block = {
                 "index": len(self.chain) + 1,
                 "timestamp": ts,
-                "trxs": self.current_trxs,
+                "trxs": [*self.current_trxs , {"sender": "", "recipient": self.client_id, "amount": 20,}],
                 "proof": proof,
                 "previous_hash": self.hash(self.chain[-1])
             }
@@ -42,6 +45,48 @@ class Blockchain:
                 return block
             else:
                 proof = proof + 1
+
+    def add_node(self , address):
+        print(address)
+        parsed_node = urlparse(address)
+        self.nodes.add(parsed_node.netloc)
+
+    def valid_chain(self , chain):
+        last_block = chain[0]
+        current_index = 1
+
+        while current_index < len(chain):
+            block = chain[current_index]
+            if block['previous_hash'] != self.hash(last_block) :
+                return False
+            if self.valid_proof(block) == False :
+                return False
+            
+            last_block = block
+            current_index += 1
+        
+        return True
+
+    def consensus(slef):
+        nodes = slef.nodes
+        new_chain = None
+        max_length = len(slef.chain)
+
+        for node in nodes :
+            res = requests.get(f'http://{node}/chain')
+            if res.status_code == 200:
+                length = res.json()['length']
+                chain = res.json()['chain']
+                print(chain)
+            if length > max_length and slef.valid_chain(chain):
+                new_chain = chain
+                max_length = length
+
+        if new_chain :
+            slef.chain = new_chain
+            return True
+
+        return False
 
     def valid_proof(self, block):
         block_hash = self.hash(block)
@@ -80,7 +125,7 @@ def get_chain():
     return jsonify(res), 200
 
 
-@app.route("/main")
+@app.route("/mine")
 def main():
     new_block = blockchain.create_block()
     res = {
@@ -88,3 +133,28 @@ def main():
         "block": new_block
     }
     return jsonify(res), 201
+
+@app.route("/nodes/add" , methods=["POST"])
+def add_new_node():
+    # example input [{node : "http://0.0.0.0:6000"}]
+    address = request.get_json()
+    for node in address:
+        blockchain.add_node(node["node"])
+
+    res = {
+        "message" : "New nodes added successfully",
+        "total_nodes" : list(blockchain.nodes)
+    }
+    return jsonify(res) , 201
+
+@app.route("/nodes/consensus")
+def nodes_consensus():
+    replace = blockchain.consensus()
+    res = {
+        "message":"The chain is completed",
+        "new_chain" : blockchain.chain
+    }
+    return jsonify(res) , 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0")
