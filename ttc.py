@@ -91,6 +91,14 @@ class Blockchain:
         block_hash = self.hash(block)
         return block_hash[:4] == "0000"
 
+    def update_trx_list(self, block_trxs):
+        if len(self.current_trxs) > 0:
+            for t in self.current_trxs:
+                for bt in block_trxs:
+                    if t == bt:
+                        self.current_trxs.remove(t)
+        return True
+
     @staticmethod
     def hash(block):
         block_string = json.dumps(block, sort_keys=True).encode()
@@ -127,6 +135,12 @@ def get_chain():
 @app.route("/mine")
 def main():
     new_block = blockchain.create_block()
+
+    # send block for nodes
+    nodes = blockchain.nodes
+    for node in nodes:
+        res = requests.post(f'http://{node}/blockaccept', json=new_block)
+
     res = {
         "message": "The new block was successfully mined",
         "block": new_block
@@ -165,5 +179,38 @@ def nodes_consensus():
     return jsonify(res), 200
 
 
+@app.route("/blockaccept", methods=["POST"])
+def accept_newblock():
+    block = request.get_json()
+    last_block = blockchain.chain[-1]
+
+    # validation new block
+    if block['previous_hash'] == blockchain.hash(last_block):
+        if blockchain.valid_proof(block) == True:
+
+            # update trxs list
+            block_trxs = block["trxs"]
+            update_result = blockchain.update_trx_list(block_trxs)
+
+            # add block in chain
+            blockchain.chain.append(block)
+
+            # send new block for nodes
+            nodes = blockchain.nodes
+            for node in nodes:
+                res = requests.post(f'http://{node}/blockaccept', json=block)
+            res = {
+                "message": "block added to my chain"
+            }
+
+            return jsonify(res), 200
+
+    return jsonify({"message": "block not is valid"})
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0")
+
+
+# nodes ok
+# mineing

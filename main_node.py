@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 
 # main node address http://127.0.0.1:5000/
 
+
 class Blockchain:
     def __init__(self):
         self.chain = [{
@@ -37,7 +38,7 @@ class Blockchain:
             block = {
                 "index": len(self.chain) + 1,
                 "timestamp": ts,
-                "trxs": [*self.current_trxs , {"sender": "", "recipient": self.client_id, "amount": 20,}],
+                "trxs": [*self.current_trxs, {"sender": "", "recipient": self.client_id, "amount": 20, }],
                 "proof": proof,
                 "previous_hash": self.hash(self.chain[-1])
             }
@@ -48,25 +49,25 @@ class Blockchain:
             else:
                 proof = proof + 1
 
-    def add_node(self , address):
+    def add_node(self, address):
         print(address)
         parsed_node = urlparse(address)
         self.nodes.add(parsed_node.netloc)
 
-    def valid_chain(self , chain):
+    def valid_chain(self, chain):
         last_block = chain[0]
         current_index = 1
 
         while current_index < len(chain):
             block = chain[current_index]
-            if block['previous_hash'] != self.hash(last_block) :
+            if block['previous_hash'] != self.hash(last_block):
                 return False
-            if self.valid_proof(block) == False :
+            if self.valid_proof(block) == False:
                 return False
-            
+
             last_block = block
             current_index += 1
-        
+
         return True
 
     def consensus(slef):
@@ -74,7 +75,7 @@ class Blockchain:
         new_chain = None
         max_length = len(slef.chain)
 
-        for node in nodes :
+        for node in nodes:
             res = requests.get(f'http://{node}/chain')
             if res.status_code == 200:
                 length = res.json()['length']
@@ -84,7 +85,7 @@ class Blockchain:
                 new_chain = chain
                 max_length = length
 
-        if new_chain :
+        if new_chain:
             slef.chain = new_chain
             return True
 
@@ -93,6 +94,14 @@ class Blockchain:
     def valid_proof(self, block):
         block_hash = self.hash(block)
         return block_hash[:4] == "0000"
+
+    def update_trx_list(self, block_trxs):
+        if len(self.current_trxs) > 0:
+            for t in self.current_trxs:
+                for bt in block_trxs:
+                    if t == bt:
+                        self.current_trxs.remove(t)
+        return True
 
     @staticmethod
     def hash(block):
@@ -130,13 +139,20 @@ def get_chain():
 @app.route("/mine")
 def main():
     new_block = blockchain.create_block()
+
+    # send block for nodes
+    nodes = blockchain.nodes
+    for node in nodes:
+        res = requests.post(f'http://{node}/blockaccept', json=new_block)
+
     res = {
         "message": "The new block was successfully mined",
         "block": new_block
     }
     return jsonify(res), 201
 
-@app.route("/nodes/add" , methods=["POST"])
+
+@app.route("/nodes/add", methods=["POST"])
 def add_new_node():
     # example input {node : "http://0.0.0.0:6000"}
 
@@ -152,20 +168,50 @@ def add_new_node():
     nodes_list.remove(parsed_node.netloc)
 
     res = {
-        "message" : "New nodes added successfully",
-        "nodes" : nodes_list
+        "message": "New nodes added successfully",
+        "nodes": nodes_list
     }
-    return jsonify(res) , 201
+    return jsonify(res), 201
+
 
 @app.route("/nodes/consensus")
 def nodes_consensus():
     replace = blockchain.consensus()
     res = {
-        "message":"The chain is completed",
-        "new_chain" : blockchain.chain
+        "message": "The chain is completed",
+        "new_chain": blockchain.chain
     }
-    return jsonify(res) , 200
+    return jsonify(res), 200
+
+
+@app.route("/blockaccept", methods=["POST"])
+def accept_newblock():
+    block = request.get_json()
+    last_block = blockchain.chain[-1]
+
+    # validation new block
+    if block['previous_hash'] == blockchain.hash(last_block):
+        if blockchain.valid_proof(block) == True:
+
+            # update trxs list
+            block_trxs = block["trxs"]
+            update_result = blockchain.update_trx_list(block_trxs)
+
+            # add block in chain
+            blockchain.chain.append(block)
+
+            # send new block for nodes
+            nodes = blockchain.nodes
+            for node in nodes:
+                res = requests.post(f'http://{node}/blockaccept', json=block)
+            res = {
+                "message": "block added to my chain"
+            }
+
+            return jsonify(res), 200
+
+    return jsonify({"message": "block not is valid"})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0")
-    
