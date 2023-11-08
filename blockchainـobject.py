@@ -19,12 +19,14 @@ class Blockchain:
         self.client_id = time()
         self.nodes.add('127.0.0.1:5000')
 
-    def new_trx(self, sender, recipient, amount):
+    def new_trx(self, sender, recipient, amount , ts):
         self.current_trxs.append({
             "sender": sender,
             "recipient": recipient,
             "amount": amount,
+            "ts" : ts
         })
+        
         return self.last_block["index"] + 1
 
     def create_block(self):
@@ -76,7 +78,6 @@ class Blockchain:
             if res.status_code == 200:
                 length = res.json()['length']
                 chain = res.json()['chain']
-                print(chain)
             if length > max_length and slef.valid_chain(chain):
                 new_chain = chain
                 max_length = length
@@ -93,11 +94,11 @@ class Blockchain:
 
     def update_trx_list(self, block_trxs):
         if len(self.current_trxs) > 0:
-            for t in self.current_trxs:
-                for bt in block_trxs:
+            for bt in block_trxs:
+                for t in self.current_trxs:
                     if t == bt:
                         self.current_trxs.remove(t)
-        return True
+        return self.current_trxs
 
     @staticmethod
     def hash(block):
