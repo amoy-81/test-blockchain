@@ -21,8 +21,11 @@ def create_trx():
 
     nodes = blockchain.nodes
     for n in nodes:
-        response = requests.post(f'http://{n}/trx/share', json={
-                                 "sender": body["sender"], "recipient": body["recipient"], "amount": body["amount"], "ts": ts})
+        try:
+            response = requests.post(f'http://{n}/trx/share', json={
+                "sender": body["sender"], "recipient": body["recipient"], "amount": body["amount"], "ts": ts})
+        except:
+            print(n)
     return jsonify({"message": f'new trx successfully created in block {index}'}), 201
 
 
@@ -42,7 +45,10 @@ def main():
     # send block for nodes
     nodes = blockchain.nodes
     for node in nodes:
-        res = requests.post(f'http://{node}/blockaccept', json=new_block)
+        try:
+            res = requests.post(f'http://{node}/blockaccept', json=new_block)
+        except:
+            print(node)
 
     res = {
         "message": "The new block was successfully mined",
@@ -62,11 +68,14 @@ def register_node():
     last_node_list = blockchain.nodes
     max_length = len(last_node_list)
     for n in nodes:
-        response = requests.post(
-            f"http://{n}/nodes/add", json={"address": address['node']})
-        if response.status_code == 201:
-            if len(response.json()['nodes']) > max_length:
-                last_node_list = response.json()['nodes']
+        try:
+            response = requests.post(
+                f"http://{n}/nodes/add", json={"address": address['node']})
+            if response.status_code == 201:
+                if len(response.json()['nodes']) > max_length:
+                    last_node_list = response.json()['nodes']
+        except:
+            print(n)
 
     # if response ok add add received nodes to the list of nodes
     for node in last_node_list:
@@ -99,13 +108,16 @@ def share_new_trx():
         if new_trx == t:
             exist_trx = True
             break
-    if exist_trx == False :
+    if exist_trx == False:
         add_result = blockchain.current_trxs.append(new_trx)
 
         for node in blockchain.nodes:
-            res = requests.post(f'http://{node}/trx/share', json=new_trx)
+            try:
+                res = requests.post(f'http://{node}/trx/share', json=new_trx)
+            except:
+                print(node)
         return jsonify({"message": "trx successfuly add in current trxs"}), 201
-    else :
+    else:
         return jsonify({"message": "trx is already exists"})
 
 
@@ -126,7 +138,11 @@ def accept_newblock():
             # send new block for nodes
             nodes = blockchain.nodes
             for node in nodes:
-                res = requests.post(f'http://{node}/blockaccept', json=block)
+                try:
+                    res = requests.post(
+                        f'http://{node}/blockaccept', json=block)
+                except:
+                    print(node)
             res = {
                 "message": "block added to my chain"
             }
@@ -138,7 +154,3 @@ def accept_newblock():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0")
-
-
-# nodes ok
-# bug node downing
