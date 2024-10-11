@@ -17,7 +17,7 @@ class Blockchain:
         self.current_trxs = []
         self.nodes = set()
         self.client_id = time()
-        self.nodes.add('127.0.0.1:5000')
+        self.nodes.add('localhost:5000')
 
     def new_trx(self, sender, recipient, amount , ts):
         self.current_trxs.append({
