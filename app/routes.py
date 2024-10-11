@@ -4,12 +4,21 @@ import requests
 from time import time
 from urllib.parse import urlparse
 from flask import Flask, jsonify, request
-from blockchainـobject import Blockchain
+from app.blockchain_object import Blockchain
+import sys
+from app import app 
 
 blockchain = Blockchain()
 
-app = Flask(__name__)
+proxies = {
+    "http": None,
+    "https": None,
+}
 
+@app.route("/", methods=["GET"])
+def sey_hello(): 
+    res = requests.get('https://jsonplaceholder.typicode.com/todos/1')
+    return jsonify({"message": res.json()}), 200
 
 @app.route("/trx/new", methods=["POST"])
 def create_trx():
@@ -22,8 +31,7 @@ def create_trx():
     nodes = blockchain.nodes
     for n in nodes:
         try:
-            response = requests.post(f'http://{n}/trx/share', json={
-                "sender": body["sender"], "recipient": body["recipient"], "amount": body["amount"], "ts": ts})
+            response = requests.post(f'http://{n}/trx/share', json={"sender": body["sender"], "recipient": body["recipient"], "amount": body["amount"], "ts": ts}, proxies=proxies)
         except:
             print(n)
     return jsonify({"message": f'new trx successfully created in block {index}'}), 201
@@ -46,7 +54,7 @@ def main():
     nodes = blockchain.nodes
     for node in nodes:
         try:
-            res = requests.post(f'http://{node}/blockaccept', json=new_block)
+            res = requests.post(f'http://{node}/blockaccept', json=new_block, proxies=proxies)
         except:
             print(node)
 
@@ -56,6 +64,27 @@ def main():
     }
     return jsonify(res), 201
 
+@app.route("/nodes/add", methods=["POST"])
+def add_new_node():
+    # example input {node : "http://0.0.0.0:6000"}
+
+    # get node address and add to list and send nodes
+    address = request.get_json()
+
+    # add node in nodes list
+    blockchain.add_node(address["address"])
+
+    # remove sender node from node lists
+    nodes_list = list(blockchain.nodes)
+    parsed_node = urlparse(address["address"])
+    nodes_list.remove(parsed_node.netloc)
+
+    print(blockchain.nodes)
+    res = {
+        "message": "New nodes added successfully",
+        "nodes": nodes_list
+    }
+    return jsonify(res), 201
 
 @app.route("/nodes/register", methods=["POST"])
 def register_node():
@@ -69,15 +98,15 @@ def register_node():
     max_length = len(last_node_list)
     for n in nodes:
         try:
-            response = requests.post(
-                f"http://{n}/nodes/add", json={"address": address['node']})
+            response = requests.post(f"http://{n}/nodes/add", json={"address": address['node']}, proxies=proxies)
             if response.status_code == 201:
                 if len(response.json()['nodes']) > max_length:
                     last_node_list = response.json()['nodes']
-        except:
-            print(n)
+        except Exception as e:
+            print(e)
 
     # if response ok add add received nodes to the list of nodes
+
     for node in last_node_list:
         blockchain.nodes.add(node)
 
@@ -113,7 +142,7 @@ def share_new_trx():
 
         for node in blockchain.nodes:
             try:
-                res = requests.post(f'http://{node}/trx/share', json=new_trx)
+                res = requests.post(f'http://{node}/trx/share', json=new_trx, proxies=proxies)
             except:
                 print(node)
         return jsonify({"message": "trx successfuly add in current trxs"}), 201
@@ -140,7 +169,7 @@ def accept_newblock():
             for node in nodes:
                 try:
                     res = requests.post(
-                        f'http://{node}/blockaccept', json=block)
+                        f'http://{node}/blockaccept', json=block, proxies=proxies)
                 except:
                     print(node)
             res = {
@@ -150,7 +179,3 @@ def accept_newblock():
             return jsonify(res), 200
 
     return jsonify({"message": "block not is valid"})
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0")
