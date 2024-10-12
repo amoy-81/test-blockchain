@@ -15,11 +15,6 @@ proxies = {
     "https": None,
 }
 
-@app.route("/", methods=["GET"])
-def sey_hello(): 
-    res = requests.get('https://jsonplaceholder.typicode.com/todos/1')
-    return jsonify({"message": res.json()}), 200
-
 @app.route("/trx/new", methods=["POST"])
 def create_trx():
     body = request.get_json()
